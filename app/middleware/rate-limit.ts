@@ -1,27 +1,43 @@
-/**
- * Simple in-memory rate limiter for server functions.
- * In production, swap the store for an Upstash Redis call.
- */
+import { createMiddleware } from "@tanstack/react-start";
+import { getWebRequest }    from "@tanstack/react-start/server";
 
+/** Simple in-memory rate limiter (swap for Upstash Redis in production) */
 const store = new Map<string, { count: number; resetAt: number }>();
 
-export function rateLimit(
-  key: string,
-  limit = 20,
-  windowMs = 60_000
-): { success: boolean; remaining: number } {
-  const now = Date.now();
-  const entry = store.get(key);
-
-  if (!entry || now > entry.resetAt) {
-    store.set(key, { count: 1, resetAt: now + windowMs });
-    return { success: true, remaining: limit - 1 };
-  }
-
-  if (entry.count >= limit) {
-    return { success: false, remaining: 0 };
-  }
-
-  entry.count++;
-  return { success: true, remaining: limit - entry.count };
+function getIp(req: Request): string {
+  return (
+    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+    req.headers.get("x-real-ip") ??
+    "unknown"
+  );
 }
+
+function createRateLimiter(limit: number, windowMs: number) {
+  return createMiddleware({ type: "function" }).server(async ({ next }) => {
+    const req = getWebRequest();
+    const ip  = getIp(req);
+    const now = Date.now();
+
+    let entry = store.get(ip);
+    if (!entry || now > entry.resetAt) {
+      entry = { count: 0, resetAt: now + windowMs };
+    }
+    entry.count++;
+    store.set(ip, entry);
+
+    if (entry.count > limit) {
+      throw new Response(JSON.stringify({ error: "Too many requests" }), {
+        status: 429,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    return next();
+  });
+}
+
+/** 20 req / 60s — for auth endpoints */
+export const authRateLimit = createRateLimiter(20, 60_000);
+
+/** 60 req / 60s — for general API */
+export const apiRateLimit  = createRateLimiter(60, 60_000);

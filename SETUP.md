@@ -1,109 +1,88 @@
-# 🚀 RivalScope — Setup Guide
+# RivalScope — Setup Guide
 
 ## Prerequisites
-
-- [Bun](https://bun.sh) installed (`curl -fsSL https://bun.sh/install | bash`)
-- A [Neon](https://neon.tech) account (free)
-- A [Stripe](https://stripe.com) account (free to start)
-- A [Resend](https://resend.com) account (free tier: 3k emails/month)
-- A [Trigger.dev](https://trigger.dev) account (free tier)
-- A [Vercel](https://vercel.com) account (free)
+- Node.js 20+ or Bun 1.1+
+- PostgreSQL database (we recommend [Neon](https://neon.tech) — free tier works)
+- Stripe account
+- Resend account (free tier: 3k emails/month)
+- OpenAI API key
 
 ---
 
-## Step 1: Install dependencies
+## 1. Clone & install
 
 ```bash
+git clone https://github.com/LcsLorenzo/rivalscope
+cd rivalscope
 bun install
 ```
 
-## Step 2: Configure environment variables
+## 2. Environment variables
 
 ```bash
 cp .env.example .env.local
 ```
 
-Fill in each value:
+Fill in each variable (see comments in `.env.example`).
 
-### Neon (Database)
-1. Go to [neon.tech](https://neon.tech) → Create project → Copy connection string
-2. Paste it as `DATABASE_URL`
-
-### Better Auth
-```bash
-openssl rand -hex 32
-# Paste the output as BETTER_AUTH_SECRET
-```
-
-### Google OAuth
-1. Go to [console.cloud.google.com](https://console.cloud.google.com)
-2. Create project → APIs & Services → Credentials → OAuth 2.0 Client
-3. Authorized redirect URIs: `http://localhost:3000/api/auth/callback/google`
-4. Copy Client ID and Secret
-
-### Stripe
-1. Go to [dashboard.stripe.com](https://dashboard.stripe.com)
-2. Get your test API keys
-3. Create two products: "Pro" ($29/month) and "Agency" ($99/month)
-4. Copy the price IDs
-5. For webhooks: `stripe listen --forward-to localhost:3000/api/stripe/webhook`
-
-### Resend
-1. Go to [resend.com](https://resend.com) → API Keys → Create
-2. Add and verify your domain
-
-### Trigger.dev
-1. Go to [trigger.dev](https://trigger.dev) → Create project
-2. Copy your secret key
-
----
-
-## Step 3: Push database schema
+## 3. Database setup
 
 ```bash
+# Push schema to your Neon DB
 bun run db:push
-```
 
-Verify in Drizzle Studio:
-```bash
+# (Optional) Open Drizzle Studio to inspect
 bun run db:studio
 ```
 
-## Step 4: Start development server
+## 4. Stripe setup
+
+1. Create two products in Stripe Dashboard:
+   - **Pro** — $29/month recurring → copy Price ID to `STRIPE_PRO_PRICE_ID`
+   - **Agency** — $99/month recurring → copy Price ID to `STRIPE_AGENCY_PRICE_ID`
+
+2. Set up webhook:
+   ```bash
+   stripe listen --forward-to localhost:3000/api/stripe/webhook
+   ```
+   Copy the webhook secret to `STRIPE_WEBHOOK_SECRET`.
+
+## 5. Run locally
 
 ```bash
-bun run dev
+bun dev
+# → http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) 🎉
+## 6. Deploy to Vercel
+
+```bash
+vercel deploy
+```
+
+Add all `.env.local` variables in Vercel Dashboard → Project → Settings → Environment Variables.
 
 ---
 
-## Step 5: Deploy to Vercel
-
-```bash
-bun install -g vercel
-vercel
-```
-
-Add all environment variables in the Vercel dashboard.
-
----
-
-## Architecture Overview
+## Architecture
 
 ```
-User Request
-    │
-    ▼
-TanStack Start (SSR + Server Functions)
-    │
-    ├── Better Auth (session validation)
-    ├── Drizzle ORM → Neon PostgreSQL
-    └── Elysia API (embedded)
-            │
-            ├── Stripe webhooks
-            └── Trigger.dev job dispatch
-                    │
-                    └── Background scraping + AI analysis
+User request
+  → TanStack Router (file-based, type-safe)
+  → beforeLoad / authMiddleware (Better Auth session)
+  → Server Function (Drizzle ORM → Neon PostgreSQL)
+  → Trigger.dev background job (scraping)
+  → OpenAI GPT-4o-mini (AI diff summary)
+  → Resend email (alert notification)
+  → Stripe webhook (plan update)
 ```
+
+## Scripts
+
+| Command | Description |
+|---|---|
+| `bun dev` | Start dev server |
+| `bun build` | Production build |
+| `bun run db:push` | Push Drizzle schema |
+| `bun run db:studio` | Open Drizzle Studio |
+| `bun run db:generate` | Generate migrations |

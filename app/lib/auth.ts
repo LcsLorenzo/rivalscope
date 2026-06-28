@@ -1,39 +1,54 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { db } from "./db";
-import * as schema from "./schema";
+import { userProfiles } from "../../drizzle/schema";
+import { eq } from "drizzle-orm";
 
 export const auth = betterAuth({
-  database: drizzleAdapter(db, {
-    provider: "pg",
-    schema: {
-      user: schema.users,
-      session: schema.sessions,
-      account: schema.accounts,
-      verification: schema.verifications,
-    },
-  }),
-  baseURL: process.env.BETTER_AUTH_URL ?? "http://localhost:3000",
+  database: drizzleAdapter(db, { provider: "pg" }),
   secret: process.env.BETTER_AUTH_SECRET!,
-  emailAndPassword: {
-    enabled: true,
-    requireEmailVerification: true,
-    sendResetPassword: async ({ user, url }) => {
-      // Resend email logic here
-      console.log(`Reset password link for ${user.email}: ${url}`);
-    },
-  },
+  baseURL: process.env.BETTER_AUTH_URL ?? "http://localhost:3000",
+
+  emailAndPassword: { enabled: true },
+
   socialProviders: {
-    google: {
-      clientId: process.env.GOOGLE_CLIENT_ID!,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+    ...(process.env.GITHUB_CLIENT_ID ? {
+      github: {
+        clientId:     process.env.GITHUB_CLIENT_ID!,
+        clientSecret: process.env.GITHUB_CLIENT_SECRET!,
+      },
+    } : {}),
+    ...(process.env.GOOGLE_CLIENT_ID ? {
+      google: {
+        clientId:     process.env.GOOGLE_CLIENT_ID!,
+        clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+      },
+    } : {}),
+  },
+
+  // Auto-create user profile on signup
+  user: {
+    additionalFields: {
+      plan: { type: "string", defaultValue: "free" },
     },
   },
-  session: {
-    expiresIn: 60 * 60 * 24 * 30, // 30 days
-    updateAge: 60 * 60 * 24,       // Refresh if older than 1 day
+
+  // Hook: create user_profile row after signup
+  hooks: {
+    after: [
+      {
+        matcher: (ctx) => ctx.path === "/sign-up/email",
+        handler: async (ctx) => {
+          if (ctx.context?.newSession?.user?.id) {
+            await db
+              .insert(userProfiles)
+              .values({ userId: ctx.context.newSession.user.id })
+              .onConflictDoNothing();
+          }
+        },
+      },
+    ],
   },
 });
 
 export type Session = typeof auth.$Infer.Session;
-export type AuthUser = typeof auth.$Infer.Session.user;

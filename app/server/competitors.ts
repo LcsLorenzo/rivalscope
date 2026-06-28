@@ -1,89 +1,89 @@
-import { createServerFn } from "@tanstack/start";
-import { z } from "zod";
-import { eq, and, count } from "drizzle-orm";
-import { db } from "~/lib/db";
-import { competitors, users } from "~/lib/schema";
+import { createServerFn } from "@tanstack/react-start";
+import { z }              from "zod";
+import { eq, and, desc }  from "drizzle-orm";
+import { db }             from "~/lib/db";
 import { authMiddleware } from "~/middleware/auth";
-import { PLAN_LIMITS } from "~/lib/stripe";
-import { checkCompetitorTask } from "../../trigger/check-competitor";
+import { apiRateLimit }   from "~/middleware/rate-limit";
+import { competitors, userProfiles } from "../../drizzle/schema";
+import { canAddCompetitor, type Plan } from "~/lib/plans";
 
-// ─── List ────────────────────────────────────────────────────────────────────
+const addSchema = z.object({
+  name: z.string().min(1, "Name is required").max(100),
+  url:  z.string().url("Must be a valid URL"),
+  description: z.string().max(500).optional(),
+});
 
+// ─── List ─────────────────────────────────────────────────────────────────────
 export const listCompetitors = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
   .handler(async ({ context }) => {
-    const userId = context.session.user.id;
-    return db.query.competitors.findMany({
-      where: eq(competitors.userId, userId),
-      orderBy: (c, { desc }) => [desc(c.createdAt)],
-    });
+    return db
+      .select()
+      .from(competitors)
+      .where(eq(competitors.userId, context.user.id))
+      .orderBy(desc(competitors.createdAt));
   });
 
-// ─── Add ────────────────────────────────────────────────────────────────────
-
+// ─── Add ──────────────────────────────────────────────────────────────────────
 export const addCompetitor = createServerFn({ method: "POST" })
-  .middleware([authMiddleware])
-  .validator(
-    z.object({
-      name: z.string().min(1).max(100),
-      url: z.string().url(),
-      description: z.string().max(500).optional(),
-    })
-  )
+  .middleware([authMiddleware, apiRateLimit])
+  .validator(addSchema)
   .handler(async ({ data, context }) => {
-    const userId = context.session.user.id;
-    const plan = context.session.user.plan as "free" | "pro" | "agency";
+    // Check plan limit
+    const [profile] = await db
+      .select()
+      .from(userProfiles)
+      .where(eq(userProfiles.userId, context.user.id))
+      .limit(1);
 
-    // Enforce plan limit
-    const [{ value: currentCount }] = await db
-      .select({ value: count() })
+    const plan = (profile?.plan ?? "free") as Plan;
+
+    const existing = await db
+      .select({ id: competitors.id })
       .from(competitors)
-      .where(eq(competitors.userId, userId));
+      .where(and(
+        eq(competitors.userId, context.user.id),
+        eq(competitors.active, true),
+      ));
 
-    const limit = PLAN_LIMITS[plan].competitors;
-    if (currentCount >= limit) {
-      throw new Error(
-        `PLAN_LIMIT: You've reached the ${limit} competitor limit on the ${plan} plan. Upgrade to add more.`
-      );
+    if (!canAddCompetitor(plan, existing.length)) {
+      throw new Error("PLAN_LIMIT: Upgrade your plan to add more competitors");
     }
 
     const [competitor] = await db
       .insert(competitors)
-      .values({ userId, name: data.name, url: data.url, description: data.description })
+      .values({ userId: context.user.id, ...data })
       .returning();
-
-    // Trigger immediate first check
-    if (competitor) {
-      await checkCompetitorTask.trigger({ competitorId: competitor.id });
-    }
 
     return competitor;
   });
 
-// ─── Delete ───────────────────────────────────────────────────────────────────
+// ─── Toggle active ────────────────────────────────────────────────────────────
+export const toggleCompetitor = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator(z.object({ id: z.string(), active: z.boolean() }))
+  .handler(async ({ data, context }) => {
+    const [updated] = await db
+      .update(competitors)
+      .set({ active: data.active, updatedAt: new Date() })
+      .where(and(
+        eq(competitors.id, data.id),
+        eq(competitors.userId, context.user.id), // ownership check
+      ))
+      .returning();
+    return updated;
+  });
 
+// ─── Delete ───────────────────────────────────────────────────────────────────
 export const deleteCompetitor = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator(z.object({ id: z.string() }))
   .handler(async ({ data, context }) => {
-    const userId = context.session.user.id;
     await db
       .delete(competitors)
-      .where(and(eq(competitors.id, data.id), eq(competitors.userId, userId)));
+      .where(and(
+        eq(competitors.id, data.id),
+        eq(competitors.userId, context.user.id), // ownership check
+      ));
     return { success: true };
-  });
-
-// ─── Pause / Resume ──────────────────────────────────────────────────────────
-
-export const toggleCompetitorStatus = createServerFn({ method: "POST" })
-  .middleware([authMiddleware])
-  .validator(z.object({ id: z.string(), status: z.enum(["active", "paused"]) }))
-  .handler(async ({ data, context }) => {
-    const userId = context.session.user.id;
-    const [updated] = await db
-      .update(competitors)
-      .set({ status: data.status })
-      .where(and(eq(competitors.id, data.id), eq(competitors.userId, userId)))
-      .returning();
-    return updated;
   });

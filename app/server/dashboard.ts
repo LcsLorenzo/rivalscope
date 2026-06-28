@@ -1,41 +1,38 @@
-import { createServerFn } from "@tanstack/start";
-import { eq, and, count, desc } from "drizzle-orm";
-import { db } from "~/lib/db";
-import { competitors, alerts, users } from "~/lib/schema";
+import { createServerFn } from "@tanstack/react-start";
+import { eq, count, and } from "drizzle-orm";
+import { db }             from "~/lib/db";
 import { authMiddleware } from "~/middleware/auth";
-import { PLAN_LIMITS } from "~/lib/stripe";
+import { competitors, alerts, userProfiles } from "../../drizzle/schema";
 
 export const getDashboardStats = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
   .handler(async ({ context }) => {
-    const userId = context.session.user.id;
-    const plan = (context.session.user as any).plan as "free" | "pro" | "agency";
+    const uid = context.user.id;
 
-    const [competitorList, recentAlerts, [unseenCount]] = await Promise.all([
-      db.query.competitors.findMany({
-        where: eq(competitors.userId, userId),
-        columns: { id: true, name: true, url: true, status: true, lastCheckedAt: true },
-        orderBy: (c, { desc }) => [desc(c.createdAt)],
-      }),
-      db.query.alerts.findMany({
-        where: eq(alerts.userId, userId),
-        orderBy: [desc(alerts.createdAt)],
-        limit: 10,
-      }),
-      db
-        .select({ value: count() })
-        .from(alerts)
-        .where(and(eq(alerts.userId, userId), eq(alerts.seen, false))),
-    ]);
+    const [competitorCount, unreadCount, totalAlerts, profile] =
+      await Promise.all([
+        db.select({ c: count() }).from(competitors)
+          .where(and(eq(competitors.userId, uid), eq(competitors.active, true)))
+          .then((r) => r[0]?.c ?? 0),
+
+        db.select({ c: count() }).from(alerts)
+          .where(and(eq(alerts.userId, uid), eq(alerts.status, "unread")))
+          .then((r) => r[0]?.c ?? 0),
+
+        db.select({ c: count() }).from(alerts)
+          .where(eq(alerts.userId, uid))
+          .then((r) => r[0]?.c ?? 0),
+
+        db.select().from(userProfiles)
+          .where(eq(userProfiles.userId, uid))
+          .limit(1)
+          .then((r) => r[0] ?? { plan: "free" }),
+      ]);
 
     return {
-      competitors: competitorList,
-      recentAlerts,
-      stats: {
-        totalCompetitors: competitorList.length,
-        unseenAlerts: unseenCount?.value ?? 0,
-        planLimit: PLAN_LIMITS[plan].competitors,
-        plan,
-      },
+      competitorCount: Number(competitorCount),
+      unreadCount:     Number(unreadCount),
+      totalAlerts:     Number(totalAlerts),
+      plan:            profile.plan,
     };
   });

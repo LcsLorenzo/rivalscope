@@ -1,32 +1,64 @@
 import { createAPIFileRoute } from "@tanstack/start/api";
-import { stripe } from "~/lib/stripe";
-import { db } from "~/lib/db";
-import { users } from "~/lib/schema";
-import { eq } from "drizzle-orm";
-import type Stripe from "stripe";
+import Stripe               from "stripe";
+import { eq }               from "drizzle-orm";
+import { db }               from "~/lib/db";
+import { userProfiles }     from "../../../../drizzle/schema";
 
-const WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET!;
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+  apiVersion: "2025-01-27.acacia",
+});
 
 export const APIRoute = createAPIFileRoute("/api/stripe/webhook")({
   POST: async ({ request }) => {
+    const sig  = request.headers.get("stripe-signature");
     const body = await request.text();
-    const sig = request.headers.get("stripe-signature");
-
-    if (!sig) return new Response("Missing signature", { status: 400 });
 
     let event: Stripe.Event;
     try {
-      event = stripe.webhooks.constructEvent(body, sig, WEBHOOK_SECRET);
-    } catch (err) {
-      console.error("Webhook signature verification failed", err);
-      return new Response("Invalid signature", { status: 400 });
+      event = stripe.webhooks.constructEvent(
+        body,
+        sig!,
+        process.env.STRIPE_WEBHOOK_SECRET!
+      );
+    } catch (err: any) {
+      return new Response(`Webhook Error: ${err.message}`, { status: 400 });
     }
 
-    try {
-      await handleStripeEvent(event);
-    } catch (err) {
-      console.error("Webhook handler error", err);
-      return new Response("Handler error", { status: 500 });
+    switch (event.type) {
+      case "checkout.session.completed": {
+        const session = event.data.object as Stripe.Checkout.Session;
+        const userId  = session.metadata?.userId;
+        const plan    = session.metadata?.plan as "pro" | "agency" | undefined;
+        if (userId && plan) {
+          await db
+            .update(userProfiles)
+            .set({ plan, stripeSubId: session.subscription as string, updatedAt: new Date() })
+            .where(eq(userProfiles.userId, userId));
+        }
+        break;
+      }
+
+      case "customer.subscription.updated": {
+        const sub = event.data.object as Stripe.Subscription;
+        const meta = sub.metadata as { userId?: string; plan?: string };
+        if (meta.userId) {
+          await db
+            .update(userProfiles)
+            .set({ stripeSubId: sub.id, updatedAt: new Date() })
+            .where(eq(userProfiles.userId, meta.userId));
+        }
+        break;
+      }
+
+      case "customer.subscription.deleted": {
+        const sub = event.data.object as Stripe.Subscription;
+        // Find user by stripeSubId and downgrade to free
+        await db
+          .update(userProfiles)
+          .set({ plan: "free", stripeSubId: null, updatedAt: new Date() })
+          .where(eq(userProfiles.stripeSubId, sub.id));
+        break;
+      }
     }
 
     return new Response(JSON.stringify({ received: true }), {
@@ -34,52 +66,3 @@ export const APIRoute = createAPIFileRoute("/api/stripe/webhook")({
     });
   },
 });
-
-async function handleStripeEvent(event: Stripe.Event) {
-  switch (event.type) {
-    case "checkout.session.completed": {
-      const session = event.data.object as Stripe.Checkout.Session;
-      if (session.mode !== "subscription") break;
-      const userId = session.subscription
-        ? ((await stripe.subscriptions.retrieve(session.subscription as string)).metadata?.userId)
-        : session.metadata?.userId;
-      if (!userId) break;
-      const sub = await stripe.subscriptions.retrieve(session.subscription as string);
-      const priceId = sub.items.data[0]?.price.id;
-      const plan = priceId === process.env.STRIPE_AGENCY_PRICE_ID ? "agency" : "pro";
-      await db.update(users).set({
-        plan,
-        stripeSubscriptionId: sub.id,
-        stripeCurrentPeriodEnd: new Date(sub.current_period_end * 1000),
-      }).where(eq(users.id, userId));
-      break;
-    }
-
-    case "customer.subscription.updated": {
-      const sub = event.data.object as Stripe.Subscription;
-      const userId = sub.metadata?.userId;
-      if (!userId) break;
-      const priceId = sub.items.data[0]?.price.id;
-      const plan = priceId === process.env.STRIPE_AGENCY_PRICE_ID
-        ? "agency"
-        : sub.status === "active" ? "pro" : "free";
-      await db.update(users).set({
-        plan,
-        stripeCurrentPeriodEnd: new Date(sub.current_period_end * 1000),
-      }).where(eq(users.id, userId));
-      break;
-    }
-
-    case "customer.subscription.deleted": {
-      const sub = event.data.object as Stripe.Subscription;
-      const userId = sub.metadata?.userId;
-      if (!userId) break;
-      await db.update(users).set({
-        plan: "free",
-        stripeSubscriptionId: null,
-        stripeCurrentPeriodEnd: null,
-      }).where(eq(users.id, userId));
-      break;
-    }
-  }
-}
