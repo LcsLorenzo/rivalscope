@@ -1,49 +1,35 @@
-import { useRouter } from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
 
-export function ErrorBoundaryFallback({ error }: { error: Error }) {
-  const router = useRouter();
-
-  const isUpgradeError = error.message.includes("UPGRADE_REQUIRED");
-  const isPlanLimitError = error.message.includes("PLAN_LIMIT");
-
-  if (isUpgradeError || isPlanLimitError) {
-    return (
-      <div className="min-h-[400px] flex items-center justify-center px-4">
-        <div className="text-center max-w-sm">
-          <div className="text-5xl mb-4">⭐</div>
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
-            Upgrade required
-          </h2>
-          <p className="text-gray-500 text-sm mb-6">
-            {isPlanLimitError
-              ? error.message.replace("PLAN_LIMIT: ", "")
-              : "This feature is only available on Pro and Agency plans."}
-          </p>
-          <a
-            href="/pricing"
-            className="inline-block bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-semibold hover:bg-indigo-700 transition"
-          >
-            View plans →
-          </a>
-        </div>
-      </div>
-    );
-  }
+export function ErrorBoundaryFallback({ error }: { error: unknown }) {
+  const message = error instanceof Error ? error.message : "An unexpected error occurred";
+  const isUpgrade = message.includes("PLAN_LIMIT") || message.includes("UPGRADE_REQUIRED");
 
   return (
-    <div className="min-h-[400px] flex items-center justify-center px-4">
-      <div className="text-center max-w-sm">
-        <div className="text-5xl mb-4">⚠️</div>
-        <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Something went wrong</h2>
-        <p className="text-gray-500 text-sm mb-6 font-mono text-xs bg-gray-100 px-3 py-2 rounded-lg">
-          {error.message}
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center px-4">
+      <div className="max-w-md w-full text-center">
+        <div className="text-5xl mb-6">{isUpgrade ? "🔒" : "🚨"}</div>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">
+          {isUpgrade ? "Upgrade required" : "Something went wrong"}
+        </h1>
+        <p className="text-gray-500 dark:text-gray-400 mb-8 text-sm">
+          {isUpgrade
+            ? "This feature is available on Pro and Agency plans."
+            : message}
         </p>
-        <button
-          onClick={() => router.invalidate()}
-          className="bg-gray-900 text-white px-6 py-2.5 rounded-xl font-semibold hover:bg-gray-700 transition"
-        >
-          Try again
-        </button>
+        <div className="flex items-center justify-center gap-3">
+          {isUpgrade ? (
+            <Link to="/pricing" className="bg-indigo-600 text-white px-6 py-3 rounded-xl font-semibold text-sm hover:bg-indigo-700 transition">
+              View pricing
+            </Link>
+          ) : (
+            <button onClick={() => window.location.reload()} className="bg-indigo-600 text-white px-6 py-3 rounded-xl font-semibold text-sm hover:bg-indigo-700 transition">
+              Try again
+            </button>
+          )}
+          <Link to="/dashboard" className="border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 px-6 py-3 rounded-xl font-semibold text-sm hover:bg-gray-50 dark:hover:bg-gray-800 transition">
+            Go to dashboard
+          </Link>
+        </div>
       </div>
     </div>
   );

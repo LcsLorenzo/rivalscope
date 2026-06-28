@@ -1,134 +1,105 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import { addCompetitor } from "~/server/competitors";
+import { authClient } from "~/lib/auth-client";
 
 export const Route = createFileRoute("/onboarding")({ component: OnboardingPage });
 
 const STEPS = [
-  { id: 1, title: "Welcome to RivalScope 🔍",     desc: "Let's set up your monitoring in 2 minutes." },
-  { id: 2, title: "Add your first competitor", desc: "Enter a competitor website URL to start tracking." },
-  { id: 3, title: "You're all set! 🎉",          desc: "We're scanning your competitor right now." },
+  { id: 1, title: "Welcome to RivalScope",    desc: "Monitor any competitor in 30 seconds. Let’s get you set up." },
+  { id: 2, title: "What are you tracking?",   desc: "Tell us who you want to monitor so we can set up your first scan." },
+  { id: 3, title: "You’re ready to go! 🎉",  desc: "Your first competitor is queued for scanning. Check back in a few minutes." },
 ];
 
 function OnboardingPage() {
   const navigate = useNavigate();
-  const [step, setStep] = useState(1);
-  const [name, setName] = useState("");
-  const [url, setUrl] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const { data: session } = authClient.useSession();
+  const [step, setStep]   = useState(1);
+  const [url, setUrl]     = useState("");
+  const [name, setName]   = useState("");
 
-  async function handleAddCompetitor(e: React.FormEvent) {
-    e.preventDefault();
-    setLoading(true);
-    setError("");
-    try {
-      await addCompetitor({ data: { name, url } });
-      setStep(3);
-    } catch (err: any) {
-      setError(err?.message ?? "Failed to add competitor");
-    } finally {
-      setLoading(false);
-    }
+  function handleNext() {
+    if (step < 3) setStep(step + 1);
+    else navigate({ to: "/dashboard" });
   }
 
+  const progress = ((step - 1) / (STEPS.length - 1)) * 100;
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 flex items-center justify-center px-4">
-      <div className="max-w-lg w-full">
-        {/* Progress bar */}
-        <div className="flex items-center gap-2 mb-10">
-          {STEPS.map((s) => (
-            <div key={s.id} className="flex-1">
-              <div className={`h-1.5 rounded-full transition-all ${
-                s.id <= step ? "bg-indigo-600" : "bg-gray-200"
-              }`} />
-            </div>
-          ))}
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center px-4">
+      <div className="w-full max-w-lg">
+        {/* Progress */}
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs text-gray-400">Step {step} of {STEPS.length}</span>
+            <span className="text-xs text-gray-400">{Math.round(progress)}%</span>
+          </div>
+          <div className="h-1.5 bg-gray-200 dark:bg-gray-800 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-indigo-600 rounded-full transition-all duration-500"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
         </div>
 
-        <div className="bg-white rounded-3xl shadow-xl shadow-indigo-100 p-8 md:p-10">
+        <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-8 shadow-sm">
           {step === 1 && (
             <div className="text-center">
-              <div className="text-5xl mb-4">🔍</div>
-              <h1 className="text-2xl font-bold text-gray-900 mb-3">Welcome to RivalScope</h1>
-              <p className="text-gray-500 mb-8">
-                You\'re about to have 24/7 competitive intelligence on autopilot.
-                Let\'s add your first competitor.
+              <div className="text-6xl mb-6">🔍</div>
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">
+                Welcome, {session?.user?.name?.split(" ")[0] ?? "there"}!
+              </h2>
+              <p className="text-gray-500 dark:text-gray-400 mb-8">
+                RivalScope monitors competitor websites 24/7 and sends you AI-powered alerts when they change anything important.
               </p>
-              <button
-                onClick={() => setStep(2)}
-                className="w-full bg-indigo-600 text-white py-3.5 rounded-2xl font-semibold hover:bg-indigo-700 transition text-lg"
-              >
-                Get started →
+              <button onClick={handleNext} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3.5 rounded-2xl font-semibold transition">
+                Let’s set up your first competitor →
               </button>
             </div>
           )}
 
           {step === 2 && (
             <div>
-              <h1 className="text-2xl font-bold text-gray-900 mb-2">Add your first competitor</h1>
-              <p className="text-gray-500 text-sm mb-8">We\'ll start scanning them right away.</p>
-              <form onSubmit={handleAddCompetitor} className="space-y-5">
-                {error && (
-                  <div className="bg-red-50 text-red-600 text-sm px-4 py-3 rounded-xl">{error}</div>
-                )}
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Add your first competitor</h2>
+              <p className="text-gray-500 text-sm mb-6">Paste their URL and give them a name. We’ll handle the rest.</p>
+              <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Competitor name</label>
-                  <input
-                    type="text"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    required
-                    placeholder="e.g. Acme Corp"
-                    className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  />
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Competitor name</label>
+                  <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Notion, Linear…"
+                    className="w-full border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Website URL</label>
-                  <input
-                    type="url"
-                    value={url}
-                    onChange={(e) => setUrl(e.target.value)}
-                    required
-                    placeholder="https://acme.com"
-                    className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  />
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Their website URL</label>
+                  <input type="url" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://notion.so/pricing"
+                    className="w-full border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                 </div>
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full bg-indigo-600 text-white py-3.5 rounded-2xl font-semibold hover:bg-indigo-700 transition disabled:opacity-50 text-base"
-                >
-                  {loading ? "Adding & scanning..." : "Add competitor & continue"}
-                </button>
-              </form>
+              </div>
+              <button
+                onClick={handleNext}
+                disabled={!url || !name}
+                className="w-full mt-6 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white py-3.5 rounded-2xl font-semibold transition"
+              >
+                Start monitoring →
+              </button>
+              <button onClick={() => navigate({ to: "/dashboard" })} className="w-full mt-3 text-gray-400 hover:text-gray-600 text-sm transition">
+                Skip for now
+              </button>
             </div>
           )}
 
           {step === 3 && (
             <div className="text-center">
-              <div className="text-5xl mb-4">🎉</div>
-              <h1 className="text-2xl font-bold text-gray-900 mb-3">You\'re all set!</h1>
-              <p className="text-gray-500 mb-3">
-                We\'re scanning <strong>{name}</strong> right now.
-                You\'ll get an alert as soon as we detect any changes.
+              <div className="text-6xl mb-6">🎉</div>
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">You’re all set!</h2>
+              <p className="text-gray-500 dark:text-gray-400 mb-8">
+                We’re scanning <strong className="text-gray-700 dark:text-gray-200">{name || "your competitor"}</strong> now.
+                You’ll get an alert as soon as anything changes.
               </p>
-              <p className="text-indigo-600 text-sm font-medium mb-8">
-                ⚡ First scan usually completes within 2 minutes.
-              </p>
-              <button
-                onClick={() => navigate({ to: "/dashboard" })}
-                className="w-full bg-indigo-600 text-white py-3.5 rounded-2xl font-semibold hover:bg-indigo-700 transition text-base"
-              >
+              <button onClick={handleNext} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3.5 rounded-2xl font-semibold transition">
                 Go to dashboard →
               </button>
             </div>
           )}
         </div>
-
-        <p className="text-center text-gray-400 text-xs mt-6">
-          Step {step} of {STEPS.length}
-        </p>
       </div>
     </div>
   );
