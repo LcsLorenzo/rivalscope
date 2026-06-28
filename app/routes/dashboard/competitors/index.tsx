@@ -1,15 +1,16 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useState } from "react";
-import { listCompetitors, deleteCompetitor, toggleCompetitorStatus } from "~/server/competitors";
+import { listCompetitors, deleteCompetitor, toggleCompetitor } from "~/server/competitors";
 import { timeAgo } from "~/lib/utils";
+import type { Competitor } from "../../../../drizzle/schema";
 
-export const Route = createFileRoute("/dashboard/competitors/")({ 
+export const Route = createFileRoute("/dashboard/competitors/")({
   loader: () => listCompetitors(),
   component: CompetitorsPage,
 });
 
 function CompetitorsPage() {
-  const competitors = Route.useLoaderData();
+  const competitors = Route.useLoaderData() as Competitor[];
   const router = useRouter();
   const [loading, setLoading] = useState<string | null>(null);
 
@@ -21,10 +22,9 @@ function CompetitorsPage() {
     setLoading(null);
   }
 
-  async function handleToggle(id: string, currentStatus: string) {
-    const next = currentStatus === "active" ? "paused" : "active";
+  async function handleToggle(id: string, currentActive: boolean) {
     setLoading(id);
-    await toggleCompetitorStatus({ data: { id, status: next as "active" | "paused" } });
+    await toggleCompetitor({ data: { id, active: !currentActive } });
     router.invalidate();
     setLoading(null);
   }
@@ -63,16 +63,14 @@ function CompetitorsPage() {
               key={c.id}
               className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-5 flex items-center gap-4"
             >
-              {/* Avatar */}
               <div className="w-12 h-12 rounded-xl bg-indigo-100 dark:bg-indigo-900 flex items-center justify-center text-xl font-bold text-indigo-600 flex-shrink-0">
                 {c.name.charAt(0).toUpperCase()}
               </div>
 
-              {/* Info */}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <p className="font-semibold text-gray-900 dark:text-white">{c.name}</p>
-                  <StatusBadge status={c.status} />
+                  <StatusBadge active={c.active} />
                 </div>
                 <a
                   href={c.url}
@@ -82,19 +80,18 @@ function CompetitorsPage() {
                 >
                   {c.url}
                 </a>
-                {c.lastCheckedAt && (
-                  <p className="text-xs text-gray-400 mt-0.5">Last checked {timeAgo(c.lastCheckedAt)}</p>
+                {c.lastChecked && (
+                  <p className="text-xs text-gray-400 mt-0.5">Last checked {timeAgo(c.lastChecked)}</p>
                 )}
               </div>
 
-              {/* Actions */}
               <div className="flex items-center gap-2 flex-shrink-0">
                 <button
-                  onClick={() => handleToggle(c.id, c.status)}
+                  onClick={() => handleToggle(c.id, c.active)}
                   disabled={loading === c.id}
                   className="text-xs border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 px-3 py-1.5 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition disabled:opacity-50"
                 >
-                  {c.status === "active" ? "⏸ Pause" : "▶ Resume"}
+                  {c.active ? "⏸ Pause" : "▶ Resume"}
                 </button>
                 <button
                   onClick={() => handleDelete(c.id)}
@@ -112,14 +109,9 @@ function CompetitorsPage() {
   );
 }
 
-function StatusBadge({ status }: { status: string }) {
-  const config: Record<string, { label: string; class: string }> = {
-    active:  { label: "Active",  class: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" },
-    paused:  { label: "Paused",  class: "bg-gray-100  text-gray-600  dark:bg-gray-700 dark:text-gray-400" },
-    error:   { label: "Error",   class: "bg-red-100   text-red-600   dark:bg-red-900/30 dark:text-red-400" },
-  };
-  const cfg = config[status] ?? config["paused"]!;
-  return (
-    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${cfg.class}`}>{cfg.label}</span>
-  );
+function StatusBadge({ active }: { active: boolean }) {
+  if (active) {
+    return <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">Active</span>;
+  }
+  return <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400">Paused</span>;
 }

@@ -2,7 +2,7 @@ import { createFileRoute }  from "@tanstack/react-router";
 import { useState }         from "react";
 import { listAlerts, markAlertRead, markAllRead } from "~/server/alerts";
 import { useToast }         from "~/components/toast";
-import type { Alert }       from "../../drizzle/schema";
+import type { Alert }       from "../../../drizzle/schema";
 
 export const Route = createFileRoute("/dashboard/alerts")({ 
   loader: () => listAlerts(),

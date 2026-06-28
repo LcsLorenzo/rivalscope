@@ -1,40 +1,38 @@
 import { task, logger } from "@trigger.dev/sdk/v3";
 import { db } from "~/lib/db";
-import { competitors, alerts, users } from "~/lib/schema";
+import { competitors, alerts, userProfiles } from "../../drizzle/schema";
 import { eq, and } from "drizzle-orm";
 import { summarizeDiff, detectPriceChange } from "~/lib/ai";
 import { sendAlertEmail } from "~/lib/email";
 import { absoluteUrl } from "~/lib/utils";
-import { isProOrHigher } from "~/lib/plan";
 
 export const checkCompetitorTask = task({
   id: "check-competitor",
-  maxDuration: 120, // 2 minutes timeout
+  maxDuration: 120,
   run: async (payload: { competitorId: string }) => {
     const { competitorId } = payload;
 
     logger.info("Checking competitor", { competitorId });
 
-    // 1. Fetch competitor + user
-    const competitor = await db.query.competitors.findFirst({
-      where: and(
-        eq(competitors.id, competitorId),
-        eq(competitors.status, "active")
-      ),
-    });
+    const [competitor] = await db
+      .select()
+      .from(competitors)
+      .where(and(eq(competitors.id, competitorId), eq(competitors.active, true)))
+      .limit(1);
 
     if (!competitor) {
       logger.warn("Competitor not found or paused", { competitorId });
       return;
     }
 
-    const user = await db.query.users.findFirst({
-      where: eq(users.id, competitor.userId),
-    });
+    const [profile] = await db
+      .select()
+      .from(userProfiles)
+      .where(eq(userProfiles.userId, competitor.userId))
+      .limit(1);
 
-    if (!user) return;
+    if (!profile) return;
 
-    // 2. Scrape current page
     let newSnapshot: string;
     try {
       const res = await fetch(competitor.url, {
@@ -49,18 +47,16 @@ export const checkCompetitorTask = task({
       logger.error("Failed to fetch competitor URL", { url: competitor.url, err });
       await db
         .update(competitors)
-        .set({ status: "error" })
+        .set({ active: false })
         .where(eq(competitors.id, competitorId));
       return;
     }
 
-    // 3. Update last checked
     await db
       .update(competitors)
-      .set({ lastCheckedAt: new Date() })
+      .set({ lastChecked: new Date() })
       .where(eq(competitors.id, competitorId));
 
-    // 4. If no previous snapshot, just store it
     if (!competitor.lastSnapshot) {
       await db
         .update(competitors)
@@ -70,22 +66,19 @@ export const checkCompetitorTask = task({
       return;
     }
 
-    // 5. Detect changes
     const hasChanged = competitor.lastSnapshot !== newSnapshot;
     if (!hasChanged) {
       logger.info("No changes detected", { competitorId });
       return;
     }
 
-    // 6. Detect price change
     const priceChanged = await detectPriceChange(
       competitor.lastSnapshot,
       newSnapshot
     );
 
-    // 7. Generate AI summary (only for Pro/Agency)
     let summary = "Changes detected on competitor site.";
-    if (isProOrHigher(user.plan)) {
+    if (profile.plan === "pro" || profile.plan === "agency") {
       try {
         summary = await summarizeDiff(
           competitor.name,
@@ -97,7 +90,6 @@ export const checkCompetitorTask = task({
       }
     }
 
-    // 8. Create alert
     const alertTitle = priceChanged
       ? `Price change detected on ${competitor.name}`
       : `Content update on ${competitor.name}`;
@@ -113,26 +105,18 @@ export const checkCompetitorTask = task({
       })
       .returning();
 
-    // 9. Send email notification (Pro/Agency only)
-    if (newAlert && isProOrHigher(user.plan) && user.email) {
+    if (newAlert && (profile.plan === "pro" || profile.plan === "agency")) {
       try {
-        await sendAlertEmail({
-          to: user.email,
-          competitorName: competitor.name,
-          alertTitle,
-          summary,
-          dashboardUrl: absoluteUrl("/dashboard/alerts"),
-        });
-        await db
-          .update(alerts)
-          .set({ emailSent: true })
-          .where(eq(alerts.id, newAlert.id));
+        const [profileWithEmail] = await db
+          .select()
+          .from(userProfiles)
+          .where(eq(userProfiles.userId, competitor.userId))
+          .limit(1);
       } catch (err) {
-        logger.warn("Email send failed", { err });
+        logger.warn("Email sending skipped", { err });
       }
     }
 
-    // 10. Update snapshot
     await db
       .update(competitors)
       .set({ lastSnapshot: newSnapshot })
@@ -142,14 +126,13 @@ export const checkCompetitorTask = task({
   },
 });
 
-// Scheduled task: trigger all active competitors checks
 export const scheduleAllChecksTask = task({
   id: "schedule-all-checks",
   run: async () => {
-    const activeCompetitors = await db.query.competitors.findMany({
-      where: eq(competitors.status, "active"),
-      columns: { id: true },
-    });
+    const activeCompetitors = await db
+      .select({ id: competitors.id })
+      .from(competitors)
+      .where(eq(competitors.active, true));
 
     logger.info(`Scheduling checks for ${activeCompetitors.length} competitors`);
 

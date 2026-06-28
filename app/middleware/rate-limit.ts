@@ -1,5 +1,5 @@
 import { createMiddleware } from "@tanstack/react-start";
-import { getWebRequest }    from "@tanstack/react-start/server";
+import { getRequest }    from "@tanstack/react-start/server";
 
 /** Simple in-memory rate limiter (swap for Upstash Redis in production) */
 const store = new Map<string, { count: number; resetAt: number }>();
@@ -14,7 +14,7 @@ function getIp(req: Request): string {
 
 function createRateLimiter(limit: number, windowMs: number) {
   return createMiddleware({ type: "function" }).server(async ({ next }) => {
-    const req = getWebRequest();
+    const req = getRequest();
     const ip  = getIp(req);
     const now = Date.now();
 

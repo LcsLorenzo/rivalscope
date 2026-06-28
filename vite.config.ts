@@ -6,22 +6,18 @@ import path                   from "node:path";
 
 export default defineConfig({
   plugins: [
-    // 1. Router plugin FIRST — scans app/routes/ and generates routeTree.gen.ts
     tanstackRouter({
       target:             "react",
       autoCodeSplitting:  true,
       routesDirectory:    "./app/routes",
       generatedRouteTree: "./app/routeTree.gen.ts",
     }),
-    // 2. Start plugin — points entry files to app/ instead of default src/
     tanstackStart({
-      defaultEntryPaths: {
-        client: "./app/client.tsx",
-        server: "./app/ssr.tsx",
-        start:  "./app/router.tsx",
-      },
+      srcDirectory: "./app",
+      router:       { entry: "./router.tsx" },
+      client:       { entry: "./client.tsx" },
+      server:       { entry: "./ssr.tsx" },
     }),
-    // 3. Tailwind CSS v4
     tailwindcss(),
   ],
   resolve: {

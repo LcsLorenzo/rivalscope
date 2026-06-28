@@ -1,4 +1,4 @@
-import { createAPIFileRoute } from "@tanstack/start/api";
+import { createFileRoute } from "@tanstack/react-router";
 
 const BASE_URL = "https://rivalscope.com";
 
@@ -9,10 +9,12 @@ const STATIC_PAGES = [
   { path: "/changelog", priority: "0.7", changefreq: "weekly"  },
 ];
 
-export const APIRoute = createAPIFileRoute("/sitemap.xml")({
-  GET: () => {
-    const now = new Date().toISOString().split("T")[0];
-    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+export const Route = createFileRoute("/sitemap/xml")({
+  server: {
+    handlers: {
+      GET: () => {
+        const now = new Date().toISOString().split("T")[0];
+        const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 ${STATIC_PAGES.map(
   ({ path, priority, changefreq }) => `  <url>
@@ -23,8 +25,10 @@ ${STATIC_PAGES.map(
   </url>`
 ).join("\n")}
 </urlset>`;
-    return new Response(xml, {
-      headers: { "Content-Type": "application/xml" },
-    });
+        return new Response(xml, {
+          headers: { "Content-Type": "application/xml" },
+        });
+      },
+    },
   },
 });

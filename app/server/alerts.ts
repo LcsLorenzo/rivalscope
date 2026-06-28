@@ -18,7 +18,7 @@ export const listAlerts = createServerFn({ method: "GET" })
 
 export const markAlertRead = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator(z.object({ id: z.string() }))
+  .inputValidator(z.object({ id: z.string() }))
   .handler(async ({ data, context }) => {
     const [updated] = await db
       .update(alerts)

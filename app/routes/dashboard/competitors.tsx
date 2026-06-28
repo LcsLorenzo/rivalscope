@@ -4,7 +4,7 @@ import { listCompetitors, addCompetitor, toggleCompetitor, deleteCompetitor } fr
 import { useToast }                    from "~/components/toast";
 import { authClient }                  from "~/lib/auth-client";
 import { PLAN_LIMITS }                 from "~/lib/plans";
-import type { Competitor }             from "../../drizzle/schema";
+import type { Competitor }             from "../../../drizzle/schema";
 import type { Plan }                   from "~/lib/plans";
 
 export const Route = createFileRoute("/dashboard/competitors")({ 

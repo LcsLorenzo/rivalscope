@@ -74,7 +74,7 @@ function LandingPage() {
           <div className="hidden md:flex items-center gap-6">
             <a href="#features"     className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition">Features</a>
             <a href="#how-it-works" className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition">How it works</a>
-            <Link to="/pricing"     className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition">Pricing</a>
+            <Link to="/pricing"     className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition">Pricing</Link>
             <Link to="/changelog"   className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition">Changelog</Link>
           </div>
           <div className="flex items-center gap-3">

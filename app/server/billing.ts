@@ -9,7 +9,7 @@ import { userProfiles }   from "../../drizzle/schema";
 import type { Plan }      from "~/lib/plans";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2025-01-27.acacia",
+  apiVersion: "2025-02-24.acacia",
 });
 
 const PRICE_IDS: Record<string, string> = {
@@ -20,7 +20,7 @@ const PRICE_IDS: Record<string, string> = {
 // ─── Create checkout ──────────────────────────────────────────────────────────
 export const createCheckout = createServerFn({ method: "POST" })
   .middleware([authMiddleware, apiRateLimit])
-  .validator(z.object({ plan: z.enum(["pro", "agency"]) }))
+  .inputValidator(z.object({ plan: z.enum(["pro", "agency"]) }))
   .handler(async ({ data, context }) => {
     const appUrl = process.env.VITE_APP_URL ?? "http://localhost:3000";
     const priceId = PRICE_IDS[data.plan];

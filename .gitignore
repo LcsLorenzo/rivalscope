@@ -10,3 +10,5 @@ bun.lockb
 .DS_Store
 app/routeTree.gen.ts
 .vite
+bun.lock
+app.config.timestamp_*

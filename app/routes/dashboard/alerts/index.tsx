@@ -1,9 +1,10 @@
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useState } from "react";
-import { listAlerts, markAlertSeen, markAllAlertsSeen } from "~/server/alerts";
+import { listAlerts, markAlertRead, markAllRead } from "~/server/alerts";
 import { timeAgo } from "~/lib/utils";
+import type { Alert } from "../../../../drizzle/schema";
 
-export const Route = createFileRoute("/dashboard/alerts/")({ 
+export const Route = createFileRoute("/dashboard/alerts/")({
   loader: () => listAlerts(),
   component: AlertsPage,
 });
@@ -16,19 +17,19 @@ const ALERT_META: Record<string, { label: string; icon: string; color: string }>
 };
 
 function AlertsPage() {
-  const alerts = Route.useLoaderData();
+  const alerts = Route.useLoaderData() as Alert[];
   const router = useRouter();
   const [filter, setFilter] = useState<string>("all");
-  const unseenCount = alerts.filter((a: any) => !a.seen).length;
+  const unreadCount = alerts.filter((a) => a.status === "unread").length;
 
   async function handleMarkAll() {
-    await markAllAlertsSeen();
+    await markAllRead();
     router.invalidate();
   }
 
   const filtered = filter === "all"
     ? alerts
-    : alerts.filter((a: any) => a.type === filter);
+    : alerts.filter((a) => a.type === filter);
 
   return (
     <div className="p-6 lg:p-8 max-w-4xl mx-auto">
@@ -36,12 +37,12 @@ function AlertsPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Alerts</h1>
           <p className="text-gray-500 text-sm mt-0.5">
-            {unseenCount > 0 ? (
-              <span className="text-indigo-600 font-medium">{unseenCount} new alert{unseenCount > 1 ? "s" : ""}</span>
+            {unreadCount > 0 ? (
+              <span className="text-indigo-600 font-medium">{unreadCount} new alert{unreadCount > 1 ? "s" : ""}</span>
             ) : "All caught up 🎉"}
           </p>
         </div>
-        {unseenCount > 0 && (
+        {unreadCount > 0 && (
           <button
             onClick={handleMarkAll}
             className="text-sm text-gray-500 hover:text-gray-700 border border-gray-200 px-3 py-1.5 rounded-lg hover:bg-gray-50 transition"
@@ -51,7 +52,6 @@ function AlertsPage() {
         )}
       </div>
 
-      {/* Filter tabs */}
       <div className="flex gap-2 mb-6 flex-wrap">
         {["all", "price_change", "content_change", "new_page"].map((type) => (
           <button
@@ -76,15 +76,17 @@ function AlertsPage() {
         </div>
       ) : (
         <div className="space-y-3">
-          {filtered.map((alert: any) => {
+          {filtered.map((alert) => {
             const meta = ALERT_META[alert.type] ?? ALERT_META["content_change"]!;
+            const isUnread = alert.status === "unread";
             return (
               <AlertCard
                 key={alert.id}
                 alert={alert}
                 meta={meta}
+                isUnread={isUnread}
                 onSeen={async () => {
-                  await markAlertSeen({ data: { id: alert.id } });
+                  await markAlertRead({ data: { id: alert.id } });
                   router.invalidate();
                 }}
               />
@@ -96,16 +98,17 @@ function AlertsPage() {
   );
 }
 
-function AlertCard({ alert, meta, onSeen }: {
-  alert: any;
+function AlertCard({ alert, meta, isUnread, onSeen }: {
+  alert: Alert;
   meta: { label: string; icon: string; color: string };
+  isUnread: boolean;
   onSeen: () => void;
 }) {
   return (
     <div className={`bg-white dark:bg-gray-800 rounded-2xl border p-5 ${
-      alert.seen
-        ? "border-gray-100 dark:border-gray-700"
-        : "border-indigo-200 dark:border-indigo-700 shadow-sm shadow-indigo-100"
+      isUnread
+        ? "border-indigo-200 dark:border-indigo-700 shadow-sm shadow-indigo-100"
+        : "border-gray-100 dark:border-gray-700"
     }`}>
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-start gap-3 flex-1">
@@ -116,7 +119,7 @@ function AlertCard({ alert, meta, onSeen }: {
               <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${meta.color}`}>
                 {meta.label}
               </span>
-              {!alert.seen && (
+              {isUnread && (
                 <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-300">
                   New
                 </span>
@@ -129,7 +132,7 @@ function AlertCard({ alert, meta, onSeen }: {
         </div>
         <div className="flex flex-col items-end gap-2 flex-shrink-0">
           <span className="text-gray-400 text-xs">{timeAgo(alert.createdAt)}</span>
-          {!alert.seen && (
+          {isUnread && (
             <button
               onClick={onSeen}
               className="text-xs text-gray-400 hover:text-indigo-600 transition"

@@ -1,47 +1,44 @@
 import Stripe from "stripe";
 import { db } from "./db";
-import { users } from "./schema";
+import { userProfiles } from "../../drizzle/schema";
 import { eq } from "drizzle-orm";
 
 export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2025-01-27.acacia",
+  apiVersion: "2025-02-24.acacia",
   typescript: true,
 });
 
-// ─── Plan limits ──────────────────────────────────────────────────────────────
-
 export const PLAN_LIMITS = {
-  free:   { competitors: 2,   checkInterval: 168 }, // weekly
-  pro:    { competitors: 10,  checkInterval: 1   }, // hourly
-  agency: { competitors: 999, checkInterval: 1   }, // hourly
+  free:   { competitors: 2,   checkInterval: 168 },
+  pro:    { competitors: 10,  checkInterval: 1   },
+  agency: { competitors: 999, checkInterval: 1   },
 } as const;
 
 export const STRIPE_PLANS = {
   pro: {
     priceId: process.env.STRIPE_PRO_PRICE_ID!,
     name: "Pro",
-    price: 2900, // $29 in cents
+    price: 2900,
   },
   agency: {
     priceId: process.env.STRIPE_AGENCY_PRICE_ID!,
     name: "Agency",
-    price: 9900, // $99 in cents
+    price: 9900,
   },
 } as const;
-
-// ─── Create/retrieve Stripe customer ─────────────────────────────────────────
 
 export async function getOrCreateStripeCustomer(
   userId: string,
   email: string,
   name?: string | null
 ): Promise<string> {
-  const user = await db.query.users.findFirst({
-    where: eq(users.id, userId),
-    columns: { stripeCustomerId: true },
-  });
+  const [profile] = await db
+    .select({ stripeCustomerId: userProfiles.stripeCustomerId })
+    .from(userProfiles)
+    .where(eq(userProfiles.userId, userId))
+    .limit(1);
 
-  if (user?.stripeCustomerId) return user.stripeCustomerId;
+  if (profile?.stripeCustomerId) return profile.stripeCustomerId;
 
   const customer = await stripe.customers.create({
     email,
@@ -50,20 +47,19 @@ export async function getOrCreateStripeCustomer(
   });
 
   await db
-    .update(users)
+    .update(userProfiles)
     .set({ stripeCustomerId: customer.id })
-    .where(eq(users.id, userId));
+    .where(eq(userProfiles.userId, userId));
 
   return customer.id;
 }
-
-// ─── Create checkout session ──────────────────────────────────────────────────
 
 export async function createCheckoutSession(
   customerId: string,
   priceId: string,
   userId: string
 ) {
+  const appUrl = process.env.VITE_APP_URL ?? "http://localhost:3000";
   return stripe.checkout.sessions.create({
     customer: customerId,
     line_items: [{ price: priceId, quantity: 1 }],
@@ -73,16 +69,15 @@ export async function createCheckoutSession(
       metadata: { userId },
     },
     allow_promotion_codes: true,
-    success_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard?upgraded=true`,
-    cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/pricing`,
+    success_url: `${appUrl}/dashboard?upgraded=true`,
+    cancel_url: `${appUrl}/pricing`,
   });
 }
 
-// ─── Create billing portal ────────────────────────────────────────────────────
-
 export async function createBillingPortal(customerId: string) {
+  const appUrl = process.env.VITE_APP_URL ?? "http://localhost:3000";
   return stripe.billingPortal.sessions.create({
     customer: customerId,
-    return_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/settings`,
+    return_url: `${appUrl}/dashboard/settings`,
   });
 }

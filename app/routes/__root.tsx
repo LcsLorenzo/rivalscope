@@ -1,9 +1,10 @@
 import {
   createRootRoute,
+  HeadContent,
   Outlet,
   ScrollRestoration,
+  Scripts,
 } from "@tanstack/react-router";
-import { Meta, Scripts }          from "@tanstack/react-start";
 import type { ReactNode }          from "react";
 import { ToastProvider }           from "~/components/toast";
 import { CommandPalette }          from "~/components/command-palette";
@@ -51,7 +52,7 @@ function RootDocument({ children }: { children: ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        <Meta />
+        <HeadContent />
         <script
           dangerouslySetInnerHTML={{
             __html:

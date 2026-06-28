@@ -1,11 +1,10 @@
-import { createAPIFileRoute } from "@tanstack/start/api";
+import { createFileRoute } from "@tanstack/react-router";
 import { auth } from "~/lib/auth";
 
-/**
- * Better Auth catch-all handler.
- * Handles: /api/auth/sign-in, /api/auth/sign-up, /api/auth/session,
- *          /api/auth/sign-out, OAuth callbacks, etc.
- */
-export const APIRoute = createAPIFileRoute("/api/auth/$")(
-  auth.handler as any
-);
+export const Route = createFileRoute("/api/auth/$")({
+  server: {
+    handlers: {
+      ANY: async ({ request }) => auth.handler(request),
+    },
+  },
+});

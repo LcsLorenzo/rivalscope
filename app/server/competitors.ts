@@ -27,7 +27,7 @@ export const listCompetitors = createServerFn({ method: "GET" })
 // ─── Add ──────────────────────────────────────────────────────────────────────
 export const addCompetitor = createServerFn({ method: "POST" })
   .middleware([authMiddleware, apiRateLimit])
-  .validator(addSchema)
+  .inputValidator(addSchema)
   .handler(async ({ data, context }) => {
     // Check plan limit
     const [profile] = await db
@@ -61,7 +61,7 @@ export const addCompetitor = createServerFn({ method: "POST" })
 // ─── Toggle active ────────────────────────────────────────────────────────────
 export const toggleCompetitor = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator(z.object({ id: z.string(), active: z.boolean() }))
+  .inputValidator(z.object({ id: z.string(), active: z.boolean() }))
   .handler(async ({ data, context }) => {
     const [updated] = await db
       .update(competitors)
@@ -77,7 +77,7 @@ export const toggleCompetitor = createServerFn({ method: "POST" })
 // ─── Delete ───────────────────────────────────────────────────────────────────
 export const deleteCompetitor = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator(z.object({ id: z.string() }))
+  .inputValidator(z.object({ id: z.string() }))
   .handler(async ({ data, context }) => {
     await db
       .delete(competitors)
