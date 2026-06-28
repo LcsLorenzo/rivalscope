@@ -5,6 +5,7 @@ import {
 } from "@tanstack/react-router";
 import { Meta, Scripts } from "@tanstack/start";
 import type { ReactNode } from "react";
+import { ErrorBoundaryFallback } from "~/components/error-boundary";
 
 export const Route = createRootRoute({
   head: () => ({
@@ -15,17 +16,33 @@ export const Route = createRootRoute({
       {
         name: "description",
         content:
-          "Monitor your competitors automatically. Get AI-powered alerts when they change prices, launch features, or update their messaging.",
+          "Monitor your competitors 24/7. Get AI-powered alerts the moment they change pricing, launch features, or update their messaging. Start free.",
       },
+      { name: "og:title", content: "RivalScope — AI Competitor Monitoring" },
+      {
+        name: "og:description",
+        content: "Know every move your competitors make. Automatically.",
+      },
+      { name: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:title", content: "RivalScope — AI Competitor Monitoring" },
+      {
+        name: "twitter:description",
+        content: "Know every move your competitors make. Automatically.",
+      },
+      { name: "robots", content: "index, follow" },
+      { name: "theme-color", content: "#6366f1" },
     ],
     links: [
+      { rel: "icon", href: "/favicon.ico" },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       {
         rel: "stylesheet",
-        href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap",
+        href: "https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700;1,14..32,400&display=swap",
       },
     ],
   }),
+  errorComponent: ({ error }) => <ErrorBoundaryFallback error={error} />,
   component: RootComponent,
 });
 
