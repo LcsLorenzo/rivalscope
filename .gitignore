@@ -1,32 +1,12 @@
-# Dependencies
-node_modules/
-.pnp
-.pnp.js
-
-# Build outputs
-.output/
-.vinxi/
-dist/
-build/
-
-# Environment files (NEVER commit these)
+node_modules
+.output
+.nitro
+dist
 .env
 .env.local
-.env.production
 .env.*.local
-
-# Database
-drizzle/meta/
-
-# Misc
-.DS_Store
-*.pem
-.vercel
-.turbo
-
-# Logs
+bun.lockb
 *.log
-npm-debug.log*
-
-# TypeScript
-*.tsbuildinfo
+.DS_Store
+app/routeTree.gen.ts
+.vite
