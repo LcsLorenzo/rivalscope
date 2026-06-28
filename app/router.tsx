@@ -4,9 +4,9 @@ import { routeTree } from "./routeTree.gen";
 export function createRouter() {
   return createTanstackRouter({
     routeTree,
-    defaultPreload:       "intent",
-    defaultPreloadDelay:  100,
-    scrollRestoration:    true,
+    defaultPreload: "intent",
+    defaultPreloadDelay: 100,
+    scrollRestoration: true,
   });
 }
 

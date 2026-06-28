@@ -12,7 +12,8 @@
     "baseUrl": ".",
     "paths": {
       "~/*": ["./app/*"]
-    }
+    },
+    "types": ["node"]
   },
-  "include": ["app", "drizzle"]
+  "include": ["app", "drizzle", "vite.config.ts"]
 }

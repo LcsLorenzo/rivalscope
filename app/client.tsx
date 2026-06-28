@@ -1,6 +1,7 @@
 import { StartClient } from "@tanstack/react-start";
-import { hydrateRoot }  from "react-dom/client";
+import { hydrateRoot } from "react-dom/client";
 import { createRouter } from "./router";
+import "./styles/globals.css";
 
 const router = createRouter();
 
